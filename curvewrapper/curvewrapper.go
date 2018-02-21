@@ -5,17 +5,16 @@ import (
 	"math/big"
 )
 
-
 type Point struct {
-	X  *big.Int
-	Y  *big.Int
+	X     *big.Int
+	Y     *big.Int
 	Curve elliptic.Curve
 }
 
 func NewPoint(x, y *big.Int, ec elliptic.Curve) Point {
 	return Point{
-		X: x,
-		Y: y,
+		X:     x,
+		Y:     y,
 		Curve: ec,
 	}
 }
