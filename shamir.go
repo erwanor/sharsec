@@ -34,3 +34,44 @@ func (s *Shamir) NewKey() Key {
 	return k
 }
 
+type ShamirPoly []*big.Int
+
+func (s *Shamir) GeneratePolynomial(deg int) ShamirPoly {
+	var p []*big.Int
+	// We want deg+1 elements because the secret is hidden in the constant term
+	// of the polynomial. That is, consider F(x)_n = SEC + A_1*x^1 + ... + A_n * x^n (A_0 = SEC)
+	for i := 0; i < deg; i++ {
+		k := s.NewKey()
+		var coeff big.Int
+		// Note that SetBytes assume Big-Endian uint
+		coeff.SetBytes(k.priv)
+		coeff.Mod(&coeff, s.ec.Params().N)
+		p = append(p, &coeff)
+	}
+	return p
+}
+
+func (p ShamirPoly) Eval(x *big.Int, mod *big.Int) *big.Int {
+	var total big.Int
+	for i := 0; i < len(p); i++ {
+		var current big.Int
+
+		// Note that modular exponentiation is not a cryptographically constant-time operation
+		// IDEA: https://www.cse.buffalo.edu/srds2009/escs2009_submission_Gopal.pdf
+		// There's a proposal to provide built-in constant-time arithmetic: https://github.com/golang/go/issues/20654
+		current.Exp(x, big.NewInt(int64(i)), nil)
+		current.Mul(p[i], &current)
+		current.Mod(&current, mod)
+		total.Add(&total, &current)
+		total.Mod(&total, mod)
+	}
+	return &total
+}
+
+func (p ShamirPoly) String() {
+	fmt.Printf("%d", p[0])
+	for i := 1; i < len(p); i++ {
+		fmt.Printf(" + %d * x^%d", p[i], i)
+	}
+	fmt.Printf("\n")
+}
