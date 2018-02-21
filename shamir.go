@@ -108,3 +108,47 @@ func (e EncryptedShare) Decrypt(priv []byte) ClearShare {
 		Value: v,
 	}
 }
+
+func (s *Shamir) Combine(c []ClearShare) *big.Int {
+	fieldOrder := s.ec.Params().N
+	pooledSecret := finitefield.NewFpInt(big.NewInt(0), fieldOrder)
+
+	for i := 0; i < len(c); i++ {
+		// Lagrange interpolation
+		// We will proceed as follow:
+		// f(x) = SUM [i = 0...(k-1)] ( y_i * Lagrange_i(x) )
+		// where Lagrange_i(x) = PROD [j = 0..(i-1)(i+1)..(k-1)] (x - x_j) * (x_i - x_j)^-1 [in the field F_p]
+		// See: http://www.math.usm.edu/lambers/mat772/fall10/lecture5.pdf for more details
+		lagrange := finitefield.NewFpInt(big.NewInt(1), fieldOrder)
+		lagNum := finitefield.NewFpInt(big.NewInt(1), fieldOrder)
+		lagDenum := finitefield.NewFpInt(big.NewInt(1), fieldOrder)
+		lagDenumInverse := finitefield.NewFpInt(big.NewInt(1), fieldOrder)
+		term := finitefield.NewFpInt(big.NewInt(1), fieldOrder)
+
+		for j := 0; j < len(c); j++ {
+			if i == j {
+				continue
+			}
+
+			deltaNum := finitefield.NewFpInt(big.NewInt(0), fieldOrder)
+			deltaDenum := finitefield.NewFpInt(big.NewInt(0), fieldOrder)
+
+			deltaNum.Sub(
+				deltaNum,
+				finitefield.NewFpInt(c[j].Value.X, fieldOrder))
+
+			lagNum.Mul(lagNum, deltaNum)
+
+			deltaDenum.Sub(
+				finitefield.NewFpInt(c[i].Value.X, fieldOrder),
+				finitefield.NewFpInt(c[j].Value.X, fieldOrder))
+
+			lagDenum.Mul(lagDenum, deltaDenum)
+		}
+		lagDenumInverse.ModInv(lagDenum)
+		lagrange.Mul(lagNum, lagDenumInverse)
+		term.Mul(finitefield.NewFpInt(c[i].Value.Y, fieldOrder), lagrange)
+		pooledSecret.Add(pooledSecret, term)
+	}
+	return pooledSecret.Value
+}
