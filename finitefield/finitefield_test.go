@@ -1,9 +1,9 @@
 package finitefield
 
 import (
-	"testing"
-	"math/big"
 	"github.com/stretchr/testify/assert"
+	"math/big"
+	"testing"
 )
 
 func assertBigInt(t *testing.T, a, b *big.Int, msgAndArgs ...interface{}) bool {
@@ -17,7 +17,6 @@ func TestNewFpInt(t *testing.T) {
 
 	b := NewFpInt(big.NewInt(256), big.NewInt(2))
 	assertBigInt(t, b.Value, big.NewInt(0), "256 reduce to 0 in F_2")
-
 
 	// p = 7
 	d := NewFpInt(big.NewInt(8), big.NewInt(7))
