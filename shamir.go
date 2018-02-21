@@ -75,3 +75,27 @@ func (p ShamirPoly) String() {
 	}
 	fmt.Printf("\n")
 }
+
+func (s *Shamir) Split(sec *big.Int, threshold int, pubkeys []Key) []ClearShare {
+	polynomial := s.GeneratePolynomial(threshold)
+	polynomial[0] = sec
+
+	polynomial.String()
+
+	var shares []ClearShare
+	for i := 0; i < len(pubkeys); i++ {
+		order := s.ec.Params().N
+		// We don't want to evaluate at 0 since that would reveal the secret
+		image := polynomial.Eval(big.NewInt(int64(i+1)), order)
+		currShare := ClearShare{
+			SID: &finitefield.FpInt{
+				Value: big.NewInt(int64(i + 1)),
+				Order: s.ec.Params().N,
+			},
+			Value: curvewrapper.NewPoint(big.NewInt(int64(i+1)), image, s.ec),
+		}
+		shares = append(shares, currShare)
+	}
+
+	return shares
+}
