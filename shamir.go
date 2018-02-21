@@ -99,3 +99,12 @@ func (s *Shamir) Split(sec *big.Int, threshold int, pubkeys []Key) []ClearShare 
 
 	return shares
 }
+
+func (e EncryptedShare) Decrypt(priv []byte) ClearShare {
+	var privKey big.Int
+	v := e.Value.ScalarDiv(privKey.SetBytes(priv))
+	return ClearShare{
+		SID:   e.SID,
+		Value: v,
+	}
+}
