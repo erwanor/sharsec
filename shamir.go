@@ -4,22 +4,21 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"fmt"
+	"github.com/aaronwinter/sharsec/curvewrapper"
+	"github.com/aaronwinter/sharsec/finitefield"
 	"math/big"
-	"sharsec/curvewrapper"
-	"sharsec/finitefield"
 )
 
 type Shamir struct {
 	ec elliptic.Curve
 }
 
-// For future iterations.
-type EncryptedShare struct {
+type ClearShare struct {
 	SID   *finitefield.FpInt
 	Value curvewrapper.Point
 }
 
-type ClearShare = EncryptedShare
+type EncryptedShare = ClearShare
 
 func NewShamirSystem(curve elliptic.Curve) *Shamir {
 	return &Shamir{
@@ -38,8 +37,6 @@ type ShamirPoly []*big.Int
 
 func (s *Shamir) GeneratePolynomial(deg int) ShamirPoly {
 	var p []*big.Int
-	// We want deg+1 elements because the secret is hidden in the constant term
-	// of the polynomial. That is, consider F(x)_n = SEC + A_1*x^1 + ... + A_n * x^n (A_0 = SEC)
 	for i := 0; i < deg; i++ {
 		k := s.NewKey()
 		var coeff big.Int
@@ -76,16 +73,17 @@ func (p ShamirPoly) String() {
 	fmt.Printf("\n")
 }
 
-func (s *Shamir) Split(sec *big.Int, threshold int, pubkeys []Key) []ClearShare {
+func (s *Shamir) Split(secret []byte, threshold int, pubkeys []Key) []ClearShare {
+	sec := new(big.Int).SetBytes(secret)
+
 	polynomial := s.GeneratePolynomial(threshold)
 	polynomial[0] = sec
-
-	polynomial.String()
 
 	var shares []ClearShare
 	for i := 0; i < len(pubkeys); i++ {
 		order := s.ec.Params().N
-		// We don't want to evaluate at 0 since that would reveal the secret
+		// Take N arbitrary points
+		// The secret is hidden in the constant term of the polynomial.
 		image := polynomial.Eval(big.NewInt(int64(i+1)), order)
 		currShare := ClearShare{
 			SID: &finitefield.FpInt{
@@ -109,46 +107,52 @@ func (e EncryptedShare) Decrypt(priv []byte) ClearShare {
 	}
 }
 
-func (s *Shamir) Combine(c []ClearShare) *big.Int {
+func (s *Shamir) Combine(c []ClearShare) []byte {
 	fieldOrder := s.ec.Params().N
-	pooledSecret := finitefield.NewFpInt(big.NewInt(0), fieldOrder)
+	field := finitefield.NewField(fieldOrder)
+	pooledSecret := field.Zero()
 
 	for i := 0; i < len(c); i++ {
-		// Lagrange interpolation
-		// We will proceed as follow:
-		// f(x) = SUM [i = 0...(k-1)] ( y_i * Lagrange_i(x) )
-		// where Lagrange_i(x) = PROD [j = 0..(i-1)(i+1)..(k-1)] (x - x_j) * (x_i - x_j)^-1 [in the field F_p]
-		// See: http://www.math.usm.edu/lambers/mat772/fall10/lecture5.pdf for more details
-		lagrange := finitefield.NewFpInt(big.NewInt(1), fieldOrder)
-		lagNum := finitefield.NewFpInt(big.NewInt(1), fieldOrder)
-		lagDenum := finitefield.NewFpInt(big.NewInt(1), fieldOrder)
-		lagDenumInverse := finitefield.NewFpInt(big.NewInt(1), fieldOrder)
-		term := finitefield.NewFpInt(big.NewInt(1), fieldOrder)
+		/*         Lagrange interpolation:
+		 *
+		 *         Read more here:
+		 *
+		 *         Quick summary:
+		 *             Given K-1 points, we want to obtain a polynomial P
+		 *             such that P(x_1) = y_1 ...P(x_{k-1}) = y_{k-1}.
+		 *
+		 *             We seek to compute P(0) (recall the secret is hidden in the constant term.
+		 *             f(x) = SUM [i = 0 -> (k-1)] ( y_i * Lagrange_i(x) )
+		 *             where Lagrange_i (x) = PROD [j = 0 -> (k-1) with j =/= i] (x - x_j) * (x_i - x_j)^-1 [in the field F_p] */
+
+		lagrange := field.One()
+		lagNum := field.One()
+		lagDenum := field.One()
+		lagDenumInverse := field.One()
+		term := field.One()
 
 		for j := 0; j < len(c); j++ {
 			if i == j {
 				continue
 			}
 
-			deltaNum := finitefield.NewFpInt(big.NewInt(0), fieldOrder)
-			deltaDenum := finitefield.NewFpInt(big.NewInt(0), fieldOrder)
+			deltaNum := field.Zero()
+			deltaDenum := field.Zero()
 
-			deltaNum.Sub(
-				deltaNum,
-				finitefield.NewFpInt(c[j].Value.X, fieldOrder))
+			// We want to interpolate at value x = 0
+			// Therefore, x - x_j = 0 - x_j = -x_j
+			deltaNum.Sub(deltaNum, field.NewInt(c[j].Value.X))
 
 			lagNum.Mul(lagNum, deltaNum)
 
-			deltaDenum.Sub(
-				finitefield.NewFpInt(c[i].Value.X, fieldOrder),
-				finitefield.NewFpInt(c[j].Value.X, fieldOrder))
+			deltaDenum.Sub(field.NewInt(c[i].Value.X), field.NewInt(c[j].Value.X))
 
 			lagDenum.Mul(lagDenum, deltaDenum)
 		}
 		lagDenumInverse.ModInv(lagDenum)
 		lagrange.Mul(lagNum, lagDenumInverse)
-		term.Mul(finitefield.NewFpInt(c[i].Value.Y, fieldOrder), lagrange)
+		term.Mul(field.NewInt(c[i].Value.Y), lagrange)
 		pooledSecret.Add(pooledSecret, term)
 	}
-	return pooledSecret.Value
+	return pooledSecret.Value.Bytes()
 }
