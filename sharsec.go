@@ -1,8 +1,8 @@
 package sharsec
 
 import (
+	"github.com/aaronwinter/sharsec/curvewrapper"
 	"math/big"
-	"sharsec/curvewrapper"
 )
 
 //   __      ___   ___ _  _ ___ _  _  ___
@@ -29,8 +29,8 @@ type Share interface {
 }
 
 type SSS interface {
-	Split(*big.Int, int, []Key) []Share
-	Combine([]Share) *big.Int
+	Split([]byte, int, []Key) []Share
+	Combine([]Share) []byte
 }
 
 type Polynomial interface {
