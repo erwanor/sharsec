@@ -9,6 +9,10 @@ type FpInt struct {
 	Order *big.Int
 }
 
+type Field struct {
+	Order *big.Int
+}
+
 func NewFpInt(v, order *big.Int) *FpInt {
 	return &FpInt{
 		Value: v.Mod(v, order),
@@ -37,4 +41,22 @@ func (k *FpInt) Mul(a, b *FpInt) *FpInt {
 func (k *FpInt) ModInv(a *FpInt) *FpInt {
 	k.Value.ModInverse(a.Value, a.Order)
 	return k
+}
+
+func NewField(order *big.Int) Field {
+	return Field{
+		Order: order,
+	}
+}
+
+func (f Field) NewInt(v *big.Int) *FpInt {
+	return NewFpInt(v, f.Order)
+}
+
+func (f Field) Zero() *FpInt {
+	return NewFpInt(big.NewInt(int64(0)), f.Order)
+}
+
+func (f Field) One() *FpInt {
+	return NewFpInt(big.NewInt(int64(1)), f.Order)
 }
