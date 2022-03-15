@@ -4,9 +4,10 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"fmt"
-	"github.com/aaronwinter/sharsec/curvewrapper"
-	"github.com/aaronwinter/sharsec/finitefield"
 	"math/big"
+
+	"github.com/erwanor/sharsec/curvewrapper"
+	"github.com/erwanor/sharsec/finitefield"
 )
 
 type Shamir struct {
@@ -52,10 +53,12 @@ func (p ShamirPoly) Eval(x *big.Int, mod *big.Int) *big.Int {
 	var total big.Int
 	for i := 0; i < len(p); i++ {
 		var current big.Int
+		/*
+		 Note: modular exponentiation is not a cryptographically constant-time operation.
+		 Idea: https://www.cse.buffalo.edu/srds2009/escs2009_submission_Gopal.pdj
+		 Language proposal to track: https://github.com/golang/go/issues/20655
+		*/
 
-		// Note that modular exponentiation is not a cryptographically constant-time operation
-		// IDEA: https://www.cse.buffalo.edu/srds2009/escs2009_submission_Gopal.pdf
-		// There's a proposal to provide built-in constant-time arithmetic: https://github.com/golang/go/issues/20654
 		current.Exp(x, big.NewInt(int64(i)), nil)
 		current.Mul(p[i], &current)
 		current.Mod(&current, mod)
@@ -113,17 +116,16 @@ func (s *Shamir) Combine(c []ClearShare) []byte {
 	pooledSecret := field.Zero()
 
 	for i := 0; i < len(c); i++ {
-		/*         Lagrange interpolation:
-		 *
-		 *         Read more here:
-		 *
-		 *         Quick summary:
-		 *             Given K-1 points, we want to obtain a polynomial P
-		 *             such that P(x_1) = y_1 ...P(x_{k-1}) = y_{k-1}.
-		 *
-		 *             We seek to compute P(0) (recall the secret is hidden in the constant term.
-		 *             f(x) = SUM [i = 0 -> (k-1)] ( y_i * Lagrange_i(x) )
-		 *             where Lagrange_i (x) = PROD [j = 0 -> (k-1) with j =/= i] (x - x_j) * (x_i - x_j)^-1 [in the field F_p] */
+		/*
+			Lagrange interpolation:
+
+			Quick summary:
+			    Given K-1 points, we want to obtain a polynomial P
+			    such that P(x_1) = y_1 ...P(x_{k-1}) = y_{k-1}.
+
+			    We seek to compute P(0) (recall the secret is hidden in the constant term.
+			    f(x) = SUM [i = 0 -> (k-1)] ( y_i * Lagrange_i(x) )
+			    where Lagrange_i (x) = PROD [j = 0 -> (k-1) with j =/= i] (x - x_j) * (x_i - x_j)^-1 [in the field F_p] */
 
 		lagrange := field.One()
 		lagNum := field.One()

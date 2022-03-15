@@ -1,8 +1,9 @@
 package sharsec
 
 import (
-	"github.com/aaronwinter/sharsec/curvewrapper"
 	"math/big"
+
+	"github.com/erwanor/sharsec/curvewrapper"
 )
 
 //   __      ___   ___ _  _ ___ _  _  ___
